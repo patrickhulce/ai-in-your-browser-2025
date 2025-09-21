@@ -223,7 +223,7 @@
           </div>
         </div>
 
-        <div class="frame-box">
+        <div class="frame-box" style="grid-column: span 3;">
           <div class="frame-header">Filmstrip Summary</div>
           <canvas class="frame-image" id="filmstripCanvas" style="height: 120px;"></canvas>
           <div class="frame-caption" id="filmstripCaption">
@@ -352,6 +352,10 @@
         videoElement.addEventListener('loadedmetadata', async () => {
           const duration = videoElement.duration
 
+          // Check if we should caption individual frames
+          const urlParams = new URLSearchParams(window.location.search)
+          const forceEach = urlParams.has('forceEach')
+
           // Extract frames at start, middle, and end
           const timestamps = [0.1, duration / 2, duration - 0.1]
           const canvasIds = ['startCanvas', 'middleCanvas', 'endCanvas']
@@ -359,15 +363,23 @@
 
           framesContainer.classList.remove('hidden')
 
-          // Reset captions to loading state
-          captionIds.forEach(id => {
-            document.getElementById(id).innerHTML = '<div class="loading"></div>'
-          })
+          // Reset captions to loading state or hide them
+          if (forceEach) {
+            captionIds.forEach(id => {
+              document.getElementById(id).innerHTML = '<div class="loading"></div>'
+              document.getElementById(id).style.display = 'flex'
+            })
+          } else {
+            captionIds.forEach(id => {
+              document.getElementById(id).textContent = ''
+              document.getElementById(id).style.display = 'none'
+            })
+          }
           document.getElementById('filmstripCaption').innerHTML = '<div class="loading"></div>'
 
           const frameCanvases = []
           for (let i = 0; i < timestamps.length; i++) {
-            await extractAndCaptionFrame(timestamps[i], canvasIds[i], captionIds[i])
+            await extractFrame(timestamps[i], canvasIds[i], forceEach ? captionIds[i] : null)
             frameCanvases.push(document.getElementById(canvasIds[i]))
           }
 
@@ -384,7 +396,7 @@
         })
       }
 
-      async function extractAndCaptionFrame(timestamp, canvasId, captionId) {
+      async function extractFrame(timestamp, canvasId, captionId = null) {
         return new Promise(resolve => {
           videoElement.currentTime = timestamp
 
@@ -401,8 +413,8 @@
             // Draw video frame to canvas
             ctx.drawImage(videoElement, 0, 0, frameCanvas.width, frameCanvas.height)
 
-            // Generate caption using FastVLM
-            if (model && processor) {
+            // Only generate caption if captionId is provided (forceEach mode)
+            if (captionId && model && processor) {
               try {
                 // Get frame data for captioning
                 const frameData = ctx.getImageData(0, 0, frameCanvas.width, frameCanvas.height)
@@ -418,8 +430,8 @@
                 console.error('Captioning error:', error)
                 document.getElementById(captionId).textContent = 'Error generating caption'
               }
-            } else {
-              document.getElementById(captionId).textContent = 'Model not loaded'
+            } else if (captionId) {
+              document.getElementById(captionId).textContent = captionId ? 'Model not loaded' : ''
             }
 
             resolve()

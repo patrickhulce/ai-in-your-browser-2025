@@ -7,7 +7,16 @@ import matplotlib.pyplot as plt
 # Data for the box and whisker plot
 stats = [
     {
-        'label': 'CPU (WASM)',
+        'label': 'JavaScript',
+        'med': 0.3,
+        'q1': 0.25,
+        'q3': 0.4,
+        'whislo': 0.2,
+        'whishi': 0.5,
+        'fliers': [],
+    },
+    {
+        'label': 'WASM',
         'med': 18.9,
         'q1': 17.8,
         'q3': 19.0,
@@ -35,7 +44,8 @@ stats = [
     },
 ]
 
-fig, ax = plt.subplots(figsize=(10, 8))
+fig, ax = plt.subplots(figsize=(16, 8), facecolor='black')
+ax.set_facecolor('black')
 
 # Create the boxplot from stats
 bp = ax.bxp(stats, patch_artist=True)
@@ -44,9 +54,9 @@ bp = ax.bxp(stats, patch_artist=True)
 
 # Colors
 box_color = 'red'
-whisker_color = 'black'
-median_color = 'black'
-cap_color = 'black'
+whisker_color = 'white'
+median_color = 'white'
+cap_color = 'white'
 
 for box in bp['boxes']:
     # change outline color
@@ -66,20 +76,30 @@ for cap in bp['caps']:
 for median in bp['medians']:
     median.set(color=median_color, linewidth=2)
 
+# Add average FPS labels above each box
+for i, stat in enumerate(stats):
+    # Calculate average from median (approximation)
+    avg_fps = stat['med']
+    ax.text(i+1, stat['whishi'] + (max([s['whishi'] for s in stats]) * 0.05), 
+            f'{avg_fps:.1f}', ha='center', va='bottom', 
+            fontsize=12, color='white', fontweight='bold')
+
 # --- Labels, Title, and Grid ---
-ax.set_ylabel('Frames Per Second (FPS)', fontsize=14)
+ax.set_ylabel('Frames Per Second (FPS)', fontsize=14, color='white')
 
 # Set y-axis to a logarithmic scale for better visualization
 #ax.set_yscale('log')
 
 # Customize ticks
-ax.tick_params(axis='both', which='major', labelsize=12)
+ax.tick_params(axis='both', which='major', labelsize=12, colors='white')
 ax.set_xticklabels([s['label'] for s in stats])
 
 # Add a grid
-ax.yaxis.grid(True, linestyle='--', which='major', color='grey', alpha=.5)
+ax.yaxis.grid(True, linestyle='--', which='major', color='white', alpha=.3)
 
-# Remove top and right spines
+# Style the remaining spines
+ax.spines['bottom'].set_color('white')
+ax.spines['left'].set_color('white')
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
 

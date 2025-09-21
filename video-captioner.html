@@ -222,6 +222,14 @@
             <div class="loading"></div>
           </div>
         </div>
+
+        <div class="frame-box">
+          <div class="frame-header">Filmstrip Summary</div>
+          <canvas class="frame-image" id="filmstripCanvas" style="height: 120px;"></canvas>
+          <div class="frame-caption" id="filmstripCaption">
+            <div class="loading"></div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -355,10 +363,16 @@
           captionIds.forEach(id => {
             document.getElementById(id).innerHTML = '<div class="loading"></div>'
           })
+          document.getElementById('filmstripCaption').innerHTML = '<div class="loading"></div>'
 
+          const frameCanvases = []
           for (let i = 0; i < timestamps.length; i++) {
             await extractAndCaptionFrame(timestamps[i], canvasIds[i], captionIds[i])
+            frameCanvases.push(document.getElementById(canvasIds[i]))
           }
+
+          // Create filmstrip and caption it
+          await createFilmstripAndCaption(frameCanvases)
 
           showStatus('All frames processed successfully!', 'success')
           URL.revokeObjectURL(url)
@@ -390,9 +404,9 @@
             // Generate caption using FastVLM
             if (model && processor) {
               try {
-                // Convert canvas to RawImage for FastVLM processing
-                const frame = ctx.getImageData(0, 0, frameCanvas.width, frameCanvas.height)
-                const rawImg = new RawImage(frame.data, frame.width, frame.height, 4)
+                // Get frame data for captioning
+                const frameData = ctx.getImageData(0, 0, frameCanvas.width, frameCanvas.height)
+                const rawImg = new RawImage(frameData.data, frameData.width, frameData.height, 4)
 
                 // Use a concise instruction for FastVLM
                 const instruction = 'Describe this video frame briefly.'
@@ -411,6 +425,42 @@
             resolve()
           })
         })
+      }
+
+      async function createFilmstripAndCaption(frameCanvases) {
+        try {
+          const filmstripCanvas = document.getElementById('filmstripCanvas')
+          const ctx = filmstripCanvas.getContext('2d')
+
+          // Calculate dimensions - use first frame as reference
+          const frameWidth = frameCanvases[0].width
+          const frameHeight = frameCanvases[0].height
+          
+          // Set filmstrip canvas size (3 frames side by side)
+          const filmstripWidth = frameWidth * 3
+          const filmstripHeight = frameHeight
+          filmstripCanvas.width = filmstripWidth
+          filmstripCanvas.height = filmstripHeight
+
+          // Draw each frame canvas side by side
+          for (let i = 0; i < frameCanvases.length; i++) {
+            ctx.drawImage(frameCanvases[i], i * frameWidth, 0, frameWidth, frameHeight)
+          }
+
+          // Generate caption for the entire filmstrip
+          if (model && processor) {
+            const filmstripData = ctx.getImageData(0, 0, filmstripWidth, filmstripHeight)
+            const filmstripImg = new RawImage(filmstripData.data, filmstripWidth, filmstripHeight, 4)
+            
+            const instruction = 'Describe in detail the action that is being performed in the video. Focus on the DIFFERENCES between the frames to describe the action.'
+            const reply = await runLocalVisionInference(filmstripImg, instruction)
+            
+            document.getElementById('filmstripCaption').textContent = reply
+          }
+        } catch (error) {
+          console.error('Filmstrip creation error:', error)
+          document.getElementById('filmstripCaption').textContent = 'Error generating filmstrip caption'
+        }
       }
 
       // FastVLM inference function

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hello WebGPU</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            border: 1px solid #ccc;
+            display: block;
+            margin: 20px 0;
+        }
+        #error {
+            color: red;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Hello WebGPU Triangle</h1>
+    <canvas id="canvas" width="800" height="600"></canvas>
+    <div id="error"></div>
+
+    <script>
+        async function init() {
+            const canvas = document.getElementById('canvas');
+            const errorDiv = document.getElementById('error');
+
+            // Check WebGPU support
+            if (!navigator.gpu) {
+                errorDiv.textContent = 'WebGPU not supported in this browser';
+                return;
+            }
+
+            try {
+                // Request adapter and device
+                const adapter = await navigator.gpu.requestAdapter();
+                if (!adapter) {
+                    errorDiv.textContent = 'No WebGPU adapter found';
+                    return;
+                }
+
+                const device = await adapter.requestDevice();
+
+                // Get canvas context
+                const context = canvas.getContext('webgpu');
+                const format = navigator.gpu.getPreferredCanvasFormat();
+                
+                context.configure({
+                    device: device,
+                    format: format,
+                    alphaMode: 'premultiplied'
+                });
+
+                // Create vertex shader
+                const vertexShader = device.createShaderModule({
+                    code: `
+                        @vertex fn main(@builtin(vertex_index) vertexIndex: u32)
+                          -> @builtin(position) vec4<f32> {
+                          // Triangle vertices
+                          var pos = array<vec2<f32>, 3>(
+                            vec2(0.0, 0.5),
+                            vec2(-0.5, -0.5),
+                            vec2(0.5, -0.5)
+                          );
+                          return vec4<f32>(pos[vertexIndex], 0.0, 1.0);
+                        }`
+                });
+
+                // Create fragment shader
+                const fragmentShader = device.createShaderModule({
+                    code: `
+                        @fragment fn main() -> @location(0) vec4<f32> {
+                          return vec4<f32>(1.0, 0.0, 0.0, 1.0); // Red color
+                        }`
+                });
+
+                // Create render pipeline
+                const pipeline = device.createRenderPipeline({
+                    layout: 'auto',
+                    vertex: {
+                        module: vertexShader,
+                        entryPoint: 'main'
+                    },
+                    fragment: {
+                        module: fragmentShader,
+                        entryPoint: 'main',
+                        targets: [{
+                            format: format
+                        }]
+                    },
+                    primitive: {
+                        topology: 'triangle-list'
+                    }
+                });
+
+                // Render function
+                function render() {
+                    const commandEncoder = device.createCommandEncoder();
+                    const textureView = context.getCurrentTexture().createView();
+                    
+                    const renderPass = commandEncoder.beginRenderPass({
+                        colorAttachments: [{
+                            view: textureView,
+                            clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+                            loadOp: 'clear',
+                            storeOp: 'store'
+                        }]
+                    });
+
+                    renderPass.setPipeline(pipeline);
+                    renderPass.draw(3, 1, 0, 0); // 3 vertices for triangle
+                    renderPass.end();
+
+                    const commandBuffer = commandEncoder.finish();
+                    device.queue.submit([commandBuffer]);
+                }
+
+                // Render the triangle
+                render();
+
+            } catch (error) {
+                errorDiv.textContent = `Error: ${error.message}`;
+                console.error(error);
+            }
+        }
+
+        // Initialize when page loads
+        init();
+    </script>
+</body>
+</html>

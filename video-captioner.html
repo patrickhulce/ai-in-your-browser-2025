@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Video Frame Captioner with FastVLM</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+          sans-serif;
+        background: linear-gradient(135deg, #000000 0%, #1a1a1a 50%, #000000 100%);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+      }
+
+      .container {
+        background: #141414;
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+        max-width: 1200px;
+        width: 100%;
+        padding: 40px;
+        border: 1px solid #333;
+      }
+
+      h1 {
+        text-align: center;
+        color: #ffffff;
+        margin-bottom: 30px;
+        font-size: 2.5em;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+      }
+
+      .upload-section {
+        border: 3px dashed #333;
+        border-radius: 10px;
+        padding: 40px;
+        text-align: center;
+        transition: border-color 0.3s;
+        background: #1a1a1a;
+      }
+
+      .upload-section.dragover {
+        border-color: #e50914;
+        background: #2a1a1a;
+      }
+
+      .file-input-label {
+        display: inline-block;
+        padding: 12px 30px;
+        background: #e50914;
+        color: white;
+        border-radius: 30px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: background 0.3s;
+        box-shadow: 0 4px 8px rgba(229, 9, 20, 0.3);
+      }
+
+      .file-input-label:hover {
+        background: #f40612;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(229, 9, 20, 0.4);
+      }
+
+      #videoInput {
+        display: none;
+      }
+
+      .status {
+        margin-top: 20px;
+        padding: 15px;
+        border-radius: 10px;
+        background: #1a1a1a;
+        color: #ffffff;
+        display: none;
+        border: 1px solid #333;
+      }
+
+      .status.error {
+        background: #2a1a1a;
+        color: #ff6b6b;
+        border-color: #e50914;
+      }
+
+      .status.success {
+        background: #1a2a1a;
+        color: #6bff6b;
+        border-color: #00cc00;
+      }
+
+      .frames-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 30px;
+        margin-top: 40px;
+      }
+
+      .frame-box {
+        background: #1a1a1a;
+        border-radius: 15px;
+        overflow: hidden;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+        transition: transform 0.3s;
+        border: 1px solid #333;
+      }
+
+      .frame-box:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(229, 9, 20, 0.3);
+        border-color: #e50914;
+      }
+
+      .frame-header {
+        background: linear-gradient(135deg, #e50914 0%, #b2070f 100%);
+        color: white;
+        padding: 15px;
+        font-weight: 600;
+        text-align: center;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+      }
+
+      .frame-image {
+        width: 100%;
+        height: 200px;
+        object-fit: cover;
+        display: block;
+      }
+
+      .frame-caption {
+        padding: 20px;
+        min-height: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        color: #ffffff;
+        line-height: 1.5;
+        background: #141414;
+      }
+
+      .loading {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid #333;
+        border-top-color: #e50914;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      video {
+        display: none;
+      }
+
+      .webgpu-warning {
+        background: #2a1a1a;
+        color: #ffd700;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        text-align: center;
+        border: 1px solid #e50914;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🎬 Video Frame Captioner with FastVLM</h1>
+
+      <div class="upload-section" id="uploadSection">
+        <label for="videoInput" class="file-input-label"> Choose Video File </label>
+        <input type="file" id="videoInput" accept="video/*" />
+        <p style="margin-top: 15px; color: #cccccc">Or drag and drop a video file here</p>
+      </div>
+
+      <div class="status" id="status"></div>
+
+      <div class="frames-container hidden" id="framesContainer">
+        <div class="frame-box">
+          <div class="frame-header">Start Frame</div>
+          <canvas class="frame-image" id="startCanvas"></canvas>
+          <div class="frame-caption" id="startCaption">
+            <div class="loading"></div>
+          </div>
+        </div>
+
+        <div class="frame-box">
+          <div class="frame-header">Middle Frame</div>
+          <canvas class="frame-image" id="middleCanvas"></canvas>
+          <div class="frame-caption" id="middleCaption">
+            <div class="loading"></div>
+          </div>
+        </div>
+
+        <div class="frame-box">
+          <div class="frame-header">End Frame</div>
+          <canvas class="frame-image" id="endCanvas"></canvas>
+          <div class="frame-caption" id="endCaption">
+            <div class="loading"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <video id="videoElement"></video>
+    <canvas id="canvas" class="hidden"></canvas>
+
+    <script type="module">
+      import {
+        AutoProcessor,
+        AutoModelForImageTextToText,
+        RawImage,
+        TextStreamer,
+      } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers/dist/transformers.min.js'
+
+      let processor, model
+      let videoInput, uploadSection, videoElement, framesContainer, status, canvas
+
+      // Initialize DOM elements when page loads
+      window.addEventListener('DOMContentLoaded', async () => {
+        videoInput = document.getElementById('videoInput')
+        uploadSection = document.getElementById('uploadSection')
+        videoElement = document.getElementById('videoElement')
+        framesContainer = document.getElementById('framesContainer')
+        status = document.getElementById('status')
+        canvas = document.getElementById('canvas')
+
+        // Check for WebGPU support
+        if (!navigator.gpu) {
+          const warningElement = document.createElement('div')
+          warningElement.className = 'webgpu-warning'
+          warningElement.textContent =
+            'WebGPU is not available in this browser. The app may not work properly.'
+          document
+            .querySelector('.container')
+            .insertBefore(warningElement, document.querySelector('h1').nextSibling)
+        }
+
+        // Initialize FastVLM model
+        await initializeModel()
+
+        // Set up event listeners
+        setupEventListeners()
+      })
+
+      // Initialize the FastVLM model
+      async function initializeModel() {
+        showStatus('Loading FastVLM model... This may take a moment on first use.', 'info')
+        try {
+          const modelId = 'onnx-community/FastVLM-0.5B-ONNX'
+
+          showStatus('Loading processor...', 'info')
+          processor = await AutoProcessor.from_pretrained(modelId)
+
+          showStatus('Processor loaded. Loading model...', 'info')
+          model = await AutoModelForImageTextToText.from_pretrained(modelId, {
+            dtype: {
+              embed_tokens: 'fp16',
+              vision_encoder: 'q4',
+              decoder_model_merged: 'q4',
+            },
+            device: 'webgpu',
+          })
+
+          showStatus('Model loaded successfully!', 'success')
+          setTimeout(() => hideStatus(), 3000)
+        } catch (error) {
+          showStatus('Error loading model: ' + error.message, 'error')
+          console.error('Model loading error:', error)
+        }
+      }
+
+      function setupEventListeners() {
+        // Handle file selection
+        videoInput.addEventListener('change', handleVideoUpload)
+
+        // Handle drag and drop
+        uploadSection.addEventListener('dragover', e => {
+          e.preventDefault()
+          uploadSection.classList.add('dragover')
+        })
+
+        uploadSection.addEventListener('dragleave', () => {
+          uploadSection.classList.remove('dragover')
+        })
+
+        uploadSection.addEventListener('drop', e => {
+          e.preventDefault()
+          uploadSection.classList.remove('dragover')
+
+          const files = e.dataTransfer.files
+          if (files.length > 0 && files[0].type.startsWith('video/')) {
+            handleVideoFile(files[0])
+          } else {
+            showStatus('Please drop a valid video file', 'error')
+          }
+        })
+      }
+
+      function handleVideoUpload(e) {
+        const file = e.target.files[0]
+        if (file && file.type.startsWith('video/')) {
+          handleVideoFile(file)
+        } else {
+          showStatus('Please select a valid video file', 'error')
+        }
+      }
+
+      async function handleVideoFile(file) {
+        if (!model || !processor) {
+          showStatus('Model not yet loaded. Please wait...', 'error')
+          return
+        }
+
+        showStatus('Processing video...', 'info')
+        framesContainer.classList.add('hidden')
+
+        const url = URL.createObjectURL(file)
+        videoElement.src = url
+
+        videoElement.addEventListener('loadedmetadata', async () => {
+          const duration = videoElement.duration
+
+          // Extract frames at start, middle, and end
+          const timestamps = [0.1, duration / 2, duration - 0.1]
+          const canvasIds = ['startCanvas', 'middleCanvas', 'endCanvas']
+          const captionIds = ['startCaption', 'middleCaption', 'endCaption']
+
+          framesContainer.classList.remove('hidden')
+
+          // Reset captions to loading state
+          captionIds.forEach(id => {
+            document.getElementById(id).innerHTML = '<div class="loading"></div>'
+          })
+
+          for (let i = 0; i < timestamps.length; i++) {
+            await extractAndCaptionFrame(timestamps[i], canvasIds[i], captionIds[i])
+          }
+
+          showStatus('All frames processed successfully!', 'success')
+          URL.revokeObjectURL(url)
+        })
+
+        videoElement.addEventListener('error', () => {
+          showStatus('Error loading video file', 'error')
+          URL.revokeObjectURL(url)
+        })
+      }
+
+      async function extractAndCaptionFrame(timestamp, canvasId, captionId) {
+        return new Promise(resolve => {
+          videoElement.currentTime = timestamp
+
+          videoElement.addEventListener('seeked', async function onSeeked() {
+            videoElement.removeEventListener('seeked', onSeeked)
+
+            const frameCanvas = document.getElementById(canvasId)
+            const ctx = frameCanvas.getContext('2d')
+
+            // Set canvas dimensions to match video
+            frameCanvas.width = videoElement.videoWidth
+            frameCanvas.height = videoElement.videoHeight
+
+            // Draw video frame to canvas
+            ctx.drawImage(videoElement, 0, 0, frameCanvas.width, frameCanvas.height)
+
+            // Generate caption using FastVLM
+            if (model && processor) {
+              try {
+                // Convert canvas to RawImage for FastVLM processing
+                const frame = ctx.getImageData(0, 0, frameCanvas.width, frameCanvas.height)
+                const rawImg = new RawImage(frame.data, frame.width, frame.height, 4)
+
+                // Use a concise instruction for FastVLM
+                const instruction = 'Describe this video frame briefly.'
+                const reply = await runLocalVisionInference(rawImg, instruction)
+
+                const captionElement = document.getElementById(captionId)
+                captionElement.textContent = reply
+              } catch (error) {
+                console.error('Captioning error:', error)
+                document.getElementById(captionId).textContent = 'Error generating caption'
+              }
+            } else {
+              document.getElementById(captionId).textContent = 'Model not loaded'
+            }
+
+            resolve()
+          })
+        })
+      }
+
+      // FastVLM inference function
+      async function runLocalVisionInference(imgElement, instruction) {
+        const messages = [
+          {
+            role: 'system',
+            content: 'You are a helpful visual AI assistant. Respond concisely and accurately to the user\'s query in one sentence.',
+          },
+          { role: 'user', content: `<image>${instruction}` },
+        ]
+
+        const prompt = processor.apply_chat_template(messages, {
+          add_generation_prompt: true,
+        })
+
+        const inputs = await processor(imgElement, prompt, {
+          add_special_tokens: false,
+        })
+
+        const generatedIds = await model.generate({
+          ...inputs,
+          max_new_tokens: 512,
+          do_sample: false,
+          repetition_penalty: 1.2,
+        })
+
+        const output = processor.batch_decode(
+          generatedIds.slice(null, [inputs.input_ids.dims.at(-1), null]),
+          {skip_special_tokens: true},
+        )
+
+        return output[0].trim()
+      }
+
+      function showStatus(message, type = 'info') {
+        status.textContent = message
+        status.className = 'status'
+        if (type === 'error') status.classList.add('error')
+        if (type === 'success') status.classList.add('success')
+        status.style.display = 'block'
+      }
+
+      function hideStatus() {
+        status.style.display = 'none'
+      }
+    </script>
+  </body>
+</html>

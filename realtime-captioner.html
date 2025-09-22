@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Realtime Webcam Captioner with FastVLM</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+          sans-serif;
+        background: linear-gradient(135deg, #000000 0%, #1a1a1a 50%, #000000 100%);
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px;
+      }
+
+      .container {
+        background: #141414;
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+        max-width: 1200px;
+        width: 100%;
+        padding: 40px;
+        border: 1px solid #333;
+      }
+
+      h1 {
+        text-align: center;
+        color: #ffffff;
+        margin-bottom: 30px;
+        font-size: 2.5em;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+      }
+
+      .upload-section {
+        border: 3px dashed #333;
+        border-radius: 10px;
+        padding: 40px;
+        text-align: center;
+        transition: border-color 0.3s;
+        background: #1a1a1a;
+      }
+
+      .upload-section.dragover {
+        border-color: #e50914;
+        background: #2a1a1a;
+      }
+
+      .file-input-label {
+        display: inline-block;
+        padding: 12px 30px;
+        background: #e50914;
+        color: white;
+        border-radius: 30px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: background 0.3s;
+        box-shadow: 0 4px 8px rgba(229, 9, 20, 0.3);
+      }
+
+      .file-input-label:hover {
+        background: #f40612;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(229, 9, 20, 0.4);
+      }
+
+      #videoInput {
+        display: none;
+      }
+
+      .status {
+        margin-top: 20px;
+        padding: 15px;
+        border-radius: 10px;
+        background: #1a1a1a;
+        color: #ffffff;
+        display: none;
+        border: 1px solid #333;
+      }
+
+      .status.error {
+        background: #2a1a1a;
+        color: #ff6b6b;
+        border-color: #e50914;
+      }
+
+      .status.success {
+        background: #1a2a1a;
+        color: #6bff6b;
+        border-color: #00cc00;
+      }
+
+      .webcam-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 40px;
+      }
+
+      .webcam-display {
+        background: #1a1a1a;
+        border-radius: 15px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+        border: 2px solid #333;
+        margin-bottom: 30px;
+        max-width: 800px;
+        width: 100%;
+      }
+
+      .caption-area {
+        background: #141414;
+        border-radius: 15px;
+        padding: 30px;
+        max-width: 800px;
+        width: 100%;
+        min-height: 120px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        color: #ffffff;
+        line-height: 1.6;
+        font-size: 1.1em;
+        border: 1px solid #333;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+        position: relative;
+      }
+
+      .caption-loading-spinner {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        display: none;
+      }
+
+      .latency-info {
+        margin-top: 15px;
+        font-size: 0.9em;
+        color: #888;
+        font-family: monospace;
+      }
+
+      .loading {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid #333;
+        border-top-color: #e50914;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      video {
+        display: block;
+        width: 100%;
+        height: auto;
+        border-radius: 10px;
+      }
+
+      .webgpu-warning {
+        background: #2a1a1a;
+        color: #ffd700;
+        padding: 15px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        text-align: center;
+        border: 1px solid #e50914;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>📹 Realtime Webcam Captioner with FastVLM</h1>
+
+      <div class="upload-section" id="webcamSection">
+        <button id="startWebcam" class="file-input-label">Start Webcam</button>
+        <button id="stopWebcam" class="file-input-label" style="display: none; background: #666">
+          Stop Webcam
+        </button>
+        <p style="margin-top: 15px; color: #cccccc">Click to start live webcam captioning</p>
+      </div>
+
+      <div class="status" id="status"></div>
+
+      <div class="webcam-container hidden" id="webcamContainer">
+        <div class="webcam-display">
+          <video id="videoElement"></video>
+        </div>
+
+        <div class="caption-area">
+          <div class="caption-loading-spinner loading" id="captionSpinner"></div>
+          <div id="captionText">Ready to start captioning...</div>
+          <div class="latency-info" id="latencyInfo">Latency: -- ms (avg: -- ms)</div>
+        </div>
+      </div>
+    </div>
+
+    <canvas id="canvas" class="hidden"></canvas>
+
+    <script type="module">
+      import {
+        AutoProcessor,
+        AutoModelForImageTextToText,
+        RawImage,
+        TextStreamer,
+      } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers/dist/transformers.min.js'
+
+      let processor, model
+      let startWebcamBtn,
+        stopWebcamBtn,
+        webcamSection,
+        videoElement,
+        webcamContainer,
+        status,
+        canvas
+      let captionText, latencyInfo, captionSpinner
+      let webcamStream = null
+      let captioningInterval = null
+      let latencyTimes = []
+
+      // Initialize DOM elements when page loads
+      window.addEventListener('DOMContentLoaded', async () => {
+        startWebcamBtn = document.getElementById('startWebcam')
+        stopWebcamBtn = document.getElementById('stopWebcam')
+        webcamSection = document.getElementById('webcamSection')
+        videoElement = document.getElementById('videoElement')
+        webcamContainer = document.getElementById('webcamContainer')
+        status = document.getElementById('status')
+        canvas = document.getElementById('canvas')
+        captionText = document.getElementById('captionText')
+        latencyInfo = document.getElementById('latencyInfo')
+        captionSpinner = document.getElementById('captionSpinner')
+
+        // Check for WebGPU support
+        if (!navigator.gpu) {
+          const warningElement = document.createElement('div')
+          warningElement.className = 'webgpu-warning'
+          warningElement.textContent =
+            'WebGPU is not available in this browser. The app may not work properly.'
+          document
+            .querySelector('.container')
+            .insertBefore(warningElement, document.querySelector('h1').nextSibling)
+        }
+
+        // Initialize FastVLM model
+        await initializeModel()
+
+        // Set up event listeners
+        setupEventListeners()
+      })
+
+      // Initialize the FastVLM model
+      async function initializeModel() {
+        showStatus('Loading FastVLM model... This may take a moment on first use.', 'info')
+        try {
+          const modelId = 'onnx-community/FastVLM-0.5B-ONNX'
+
+          showStatus('Loading processor...', 'info')
+          processor = await AutoProcessor.from_pretrained(modelId)
+
+          showStatus('Processor loaded. Loading model...', 'info')
+          model = await AutoModelForImageTextToText.from_pretrained(modelId, {
+            dtype: {
+              embed_tokens: 'fp16',
+              vision_encoder: 'q4',
+              decoder_model_merged: 'q4',
+            },
+            device: 'webgpu',
+          })
+
+          showStatus('Model loaded successfully!', 'success')
+          setTimeout(() => hideStatus(), 3000)
+        } catch (error) {
+          showStatus('Error loading model: ' + error.message, 'error')
+          console.error('Model loading error:', error)
+        }
+      }
+
+      function setupEventListeners() {
+        // Handle webcam controls
+        startWebcamBtn.addEventListener('click', startWebcam)
+        stopWebcamBtn.addEventListener('click', stopWebcam)
+      }
+
+      async function startWebcam() {
+        if (!model || !processor) {
+          showStatus('Model not yet loaded. Please wait...', 'error')
+          return
+        }
+
+        try {
+          showStatus('Starting webcam...', 'info')
+
+          webcamStream = await navigator.mediaDevices.getUserMedia({
+            video: {width: 640, height: 480},
+          })
+
+          videoElement.srcObject = webcamStream
+          await videoElement.play()
+
+          startWebcamBtn.style.display = 'none'
+          stopWebcamBtn.style.display = 'inline-block'
+          webcamContainer.classList.remove('hidden')
+
+          showStatus('Webcam started! Captioning every 3 seconds...', 'success')
+
+          // Start continuous captioning
+          startContinuousCaptioning()
+        } catch (error) {
+          showStatus('Error accessing webcam: ' + error.message, 'error')
+          console.error('Webcam error:', error)
+        }
+      }
+
+      function stopWebcam() {
+        if (webcamStream) {
+          webcamStream.getTracks().forEach(track => track.stop())
+          webcamStream = null
+        }
+
+        if (captioningInterval) {
+          clearInterval(captioningInterval)
+          captioningInterval = null
+        }
+
+        videoElement.srcObject = null
+        startWebcamBtn.style.display = 'inline-block'
+        stopWebcamBtn.style.display = 'none'
+        webcamContainer.classList.add('hidden')
+
+        showStatus('Webcam stopped', 'info')
+      }
+
+      function startContinuousCaptioning() {
+        // Initial caption
+        captureAndCaptionFrame()
+
+        // Caption every 3 seconds
+        captioningInterval = setInterval(captureAndCaptionFrame, 3000)
+
+        // Update latency display every second
+        setInterval(updateLatencyDisplay, 1000)
+      }
+
+      async function captureAndCaptionFrame() {
+        if (!videoElement.srcObject || !model || !processor) return
+
+        const startTime = performance.now()
+
+        // Show loading spinner (keep existing caption text)
+        captionSpinner.style.display = 'block'
+
+        try {
+          // Capture frame to canvas
+          canvas.width = videoElement.videoWidth
+          canvas.height = videoElement.videoHeight
+          const ctx = canvas.getContext('2d')
+          ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height)
+
+          // Get frame data for captioning
+          const frameData = ctx.getImageData(0, 0, canvas.width, canvas.height)
+          const rawImg = new RawImage(frameData.data, frameData.width, frameData.height, 4)
+
+          // Generate caption
+          const instruction = 'Describe what you see in this webcam frame briefly and accurately.'
+          const reply = await runLocalVisionInference(rawImg, instruction)
+
+          // Calculate latency
+          const endTime = performance.now()
+          const latency = Math.round(endTime - startTime)
+          latencyTimes.push(latency)
+
+          // Keep only last 10 latency measurements
+          if (latencyTimes.length > 10) {
+            latencyTimes.shift()
+          }
+
+          // Update caption and hide spinner
+          captionText.textContent = reply
+          captionSpinner.style.display = 'none'
+        } catch (error) {
+          console.error('Captioning error:', error)
+          captionText.textContent = 'Error generating caption'
+          captionSpinner.style.display = 'none'
+        }
+      }
+
+      function updateLatencyDisplay() {
+        if (latencyTimes.length === 0) {
+          latencyInfo.textContent = 'Latency: -- ms (avg: -- ms)'
+          return
+        }
+
+        const latest = latencyTimes[latencyTimes.length - 1]
+        const average = Math.round(latencyTimes.reduce((a, b) => a + b, 0) / latencyTimes.length)
+
+        latencyInfo.textContent = `Latency: ${latest} ms (avg: ${average} ms)`
+      }
+
+      // FastVLM inference function
+      async function runLocalVisionInference(imgElement, instruction) {
+        const messages = [
+          {
+            role: 'system',
+            content:
+              "You are a helpful visual AI assistant. Respond concisely and accurately to the user's query in one sentence.",
+          },
+          {role: 'user', content: `<image>${instruction}`},
+        ]
+
+        const prompt = processor.apply_chat_template(messages, {
+          add_generation_prompt: true,
+        })
+
+        const inputs = await processor(imgElement, prompt, {
+          add_special_tokens: false,
+          device: 'webnn-npu',
+        })
+
+        const generatedIds = await model.generate({
+          ...inputs,
+          device: 'webnn',
+          max_new_tokens: 512,
+          do_sample: false,
+          repetition_penalty: 1.2,
+        })
+
+        const output = processor.batch_decode(
+          generatedIds.slice(null, [inputs.input_ids.dims.at(-1), null]),
+          {skip_special_tokens: true},
+        )
+
+        return output[0].trim()
+      }
+
+      function showStatus(message, type = 'info') {
+        status.textContent = message
+        status.className = 'status'
+        if (type === 'error') status.classList.add('error')
+        if (type === 'success') status.classList.add('success')
+        status.style.display = 'block'
+      }
+
+      function hideStatus() {
+        status.style.display = 'none'
+      }
+    </script>
+  </body>
+</html>

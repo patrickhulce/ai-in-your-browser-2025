@@ -223,9 +223,9 @@
           </div>
         </div>
 
-        <div class="frame-box" style="grid-column: span 3;">
-          <div class="frame-header">Filmstrip Summary</div>
-          <canvas class="frame-image" id="filmstripCanvas" style="height: 120px;"></canvas>
+        <div class="frame-box" style="grid-column: span 3">
+          <div class="frame-header">Filmstrip</div>
+          <canvas class="frame-image" id="filmstripCanvas"></canvas>
           <div class="frame-caption" id="filmstripCaption">
             <div class="loading"></div>
           </div>
@@ -447,7 +447,7 @@
           // Calculate dimensions - use first frame as reference
           const frameWidth = frameCanvases[0].width
           const frameHeight = frameCanvases[0].height
-          
+
           // Set filmstrip canvas size (3 frames side by side)
           const filmstripWidth = frameWidth * 3
           const filmstripHeight = frameHeight
@@ -462,16 +462,23 @@
           // Generate caption for the entire filmstrip
           if (model && processor) {
             const filmstripData = ctx.getImageData(0, 0, filmstripWidth, filmstripHeight)
-            const filmstripImg = new RawImage(filmstripData.data, filmstripWidth, filmstripHeight, 4)
-            
-            const instruction = 'Describe in detail the action that is being performed in the video. Focus on the DIFFERENCES between the frames to describe the action.'
+            const filmstripImg = new RawImage(
+              filmstripData.data,
+              filmstripWidth,
+              filmstripHeight,
+              4,
+            )
+
+            const instruction =
+              'Describe in detail the action that is being performed in the video. Focus on the DIFFERENCES between the frames to describe the action.'
             const reply = await runLocalVisionInference(filmstripImg, instruction)
-            
+
             document.getElementById('filmstripCaption').textContent = reply
           }
         } catch (error) {
           console.error('Filmstrip creation error:', error)
-          document.getElementById('filmstripCaption').textContent = 'Error generating filmstrip caption'
+          document.getElementById('filmstripCaption').textContent =
+            'Error generating filmstrip caption'
         }
       }
 
@@ -480,9 +487,10 @@
         const messages = [
           {
             role: 'system',
-            content: 'You are a helpful visual AI assistant. Respond concisely and accurately to the user\'s query in one sentence.',
+            content:
+              "You are a helpful visual AI assistant. Respond concisely and accurately to the user's query in one sentence.",
           },
-          { role: 'user', content: `<image>${instruction}` },
+          {role: 'user', content: `<image>${instruction}`},
         ]
 
         const prompt = processor.apply_chat_template(messages, {

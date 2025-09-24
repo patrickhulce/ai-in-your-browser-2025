@@ -15,8 +15,10 @@ This repository contains the code and references for the AI in Your Browser with
 
 - [CPU vs. GPU Characteristics](https://www.geeksforgeeks.org/computer-organization-architecture/difference-between-cpu-and-gpu/)
 - [GPU vs. NPU Characteristics](https://www.wevolver.com/article/npu-vs-gpu-understanding-the-key-differences-and-use-cases)
+- [Image Classification](https://en.wikipedia.org/wiki/Computer_vision#Recognition)
 - [Hugging Face](https://huggingface.co/)
-- [WASM](https://developer.mozilla.org/en-US/docs/WebAssembly)
+- [WebGL API](https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API)
+- [WebAssembly / WASM](https://developer.mozilla.org/en-US/docs/WebAssembly)
 - [File API](https://developer.mozilla.org/en-US/docs/Web/API/File_API)
 - [Canvas API](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API)
 - [WebGPU API](https://developer.chrome.com/docs/web-platform/webgpu/overview)
